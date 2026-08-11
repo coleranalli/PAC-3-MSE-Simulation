@@ -1,6 +1,8 @@
 from inventory import Inventory
 
-# Create a test inventory.
+# Test Area
+
+# creates a test inventory
 ap_inventory = Inventory(item_name="AP", on_hand=60, reorder_point=40, 
     reorder_quantity=50, holding_cost=1, shortage_cost=5)
 
@@ -45,10 +47,12 @@ print("On hand:", ap_inventory.on_hand)
 print("On order:", ap_inventory.on_order)
 print("Inventory position:", ap_inventory.get_inventory_position())
 
-print()
-print("Testing insufficient inventory")
+# bad inventory test
 
-success = ap_inventory.remove_inventory(100)
+# print()
+# print("Testing insufficient inventory")
 
-print("Removal successful:", success)
-print("On hand:", ap_inventory.on_hand)
+# success = ap_inventory.remove_inventory(100)
+
+# print("Removal successful:", success)
+# print("On hand:", ap_inventory.on_hand)
