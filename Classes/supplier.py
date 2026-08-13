@@ -80,12 +80,10 @@ class Supplier(Node):
 
         return None
 
-
     def get_queue_length(self):
         """returns length of queue (literally)"""
 
         return len(self.order_queue)
-
 
     def get_info(self):
         """returns basic info about supplier & node"""
