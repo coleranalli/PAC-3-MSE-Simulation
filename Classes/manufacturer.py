@@ -1,6 +1,6 @@
 from node import Node
 
-class Manufacturer():
+class Manufacturer(Node):
     """
     represents a manufacturing facility in the supply chain
 
