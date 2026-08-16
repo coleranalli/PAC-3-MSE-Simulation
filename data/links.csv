@@ -1,0 +1,8 @@
+origin_id,destination_id,item_name
+S1,M1,AP
+S2,M1,Aluminum
+S3,M1,HTPB
+S4,S6,Composite
+S5,M1,Inert Hardware
+S6,M1,Motor Case
+M1,A1,Propulsion Module

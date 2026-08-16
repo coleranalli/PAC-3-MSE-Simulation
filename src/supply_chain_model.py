@@ -270,7 +270,7 @@ class SupplyChainModel:
                 raise ValueError("Manufacturer does not have enough output "
                 "inventory to fill this order.")
 
-        origin_node.output_inventory.remove_inventory(order.quantity)
+            origin_node.output_inventory.remove_inventory(order.quantity)
 
         # Generate the next shipment ID.
         shipment_id = ("SH" + str(self.next_shipment_number))

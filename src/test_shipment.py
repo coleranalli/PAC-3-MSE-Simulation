@@ -1,3 +1,5 @@
+import pytest
+
 from shipment import Shipment
 
 # test Area
@@ -32,4 +34,6 @@ print()
 print(shipment1.get_info())
 
 # bad input test
-shipment1 = Shipment("SH1", "01", "S1", "M1", "AP", -5)
+def test_negative_shipment_quantity_raises_value_error():
+    with pytest.raises(ValueError):
+        Shipment("SH1", "01", "S1", "M1", "AP", -5)

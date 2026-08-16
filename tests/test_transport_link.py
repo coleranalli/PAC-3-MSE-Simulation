@@ -1,3 +1,5 @@
+import pytest
+
 from transport_link import TransportLink
 
 # Test Area
@@ -48,4 +50,6 @@ print()
 print(link1.get_info())
 
 # insidious probability input
-link1 = TransportLink("S1","M1","AP",7,2,1.5)
+def test_invalid_transport_probability_raises_value_error():
+    with pytest.raises(ValueError):
+        TransportLink("S1","M1","AP",7,2,1.5)
