@@ -3,6 +3,7 @@ from supplier import Supplier
 from inventory import Inventory
 from transport_link import TransportLink
 from supply_chain_model import SupplyChainModel
+from manufacturer import Manufacturer
 
 # Test Area
 
