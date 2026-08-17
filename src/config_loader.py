@@ -116,6 +116,60 @@ def load_links(links_path):
 
     return links
 
+def load_recipes(recipes_path):
+    recipes = {}
+
+    with open(recipes_path, "r", newline='', encoding='utf-8') as file:
+        reader = csv.DictReader(file)
+
+        if reader.fieldnames is None:
+            raise ValueError("recipes.csv must contain a header row.")
+
+        required_fields = ["manufacturer_id", "input_item", "quantity_required"]
+
+        for field_name in required_fields:
+            if field_name not in reader.fieldnames:
+                raise ValueError(
+                    f"recipes.csv is missing required column: {field_name}"
+                )
+
+        for row in reader:
+            manufacturer_id = row["manufacturer_id"].strip()
+            input_item = row["input_item"].strip()
+
+            quantity_required = convert_csv_number(
+                row["quantity_required"],
+                "quantity_required"
+            )
+
+            # boring bug prevention
+            if manufacturer_id == "":
+                raise ValueError(
+                    "Manufacturer ID cannot be empty in recipes.csv."
+                )
+
+            if input_item == "":
+                raise ValueError(
+                    "Input item cannot be empty in recipes.csv."
+                )
+
+            if quantity_required is None:
+                raise ValueError(
+                    "Recipe quantity cannot be N/A."
+                )
+
+            if quantity_required <= 0:
+                raise ValueError(
+                    "Recipe quantity must be greater than zero."
+                )
+
+            if manufacturer_id not in recipes:
+                recipes[manufacturer_id]= {}
+
+            recipes[manufacturer_id][input_item] = quantity_required
+
+    return recipes
+
 def load_configuration(nodes_path, links_path):
     """
     Load and validate the external deterministic network configuration.

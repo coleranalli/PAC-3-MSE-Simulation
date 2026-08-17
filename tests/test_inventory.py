@@ -56,3 +56,18 @@ print("Inventory position:", ap_inventory.get_inventory_position())
 
 # print("Removal successful:", success)
 # print("On hand:", ap_inventory.on_hand)
+
+def test_inventory_without_reorder_policy():
+    inventory = Inventory(
+        item_name="Propulsion Module",
+        on_hand=5,
+        reorder_point=None,
+        reorder_quantity=None,
+        holding_cost=None,
+        shortage_cost=None
+    )
+
+    assert inventory.on_hand == 5
+    assert inventory.reorder_point is None
+    assert inventory.reorder_quantity is None
+    assert inventory.should_reorder() is False

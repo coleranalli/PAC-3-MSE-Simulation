@@ -18,13 +18,15 @@ class Inventory():
             raise ValueError('On-order inventory cannot be negative.')
         if backorders < 0:
             raise ValueError('Backorders cannot be negative.')
-        if reorder_point < 0:
+
+        # due to N/A's in csv files, changing to ensure compatability
+        if reorder_point is not None and reorder_point < 0:
             raise ValueError('Reorder point cannot be negative.')
-        if reorder_quantity < 0:
-            raise ValueError('Reoder quantity inventory cannot be negative.')
-        if holding_cost < 0:
+        if reorder_quantity is not None and reorder_quantity < 0:
+            raise ValueError('Reoder quantity cannot be negative.')
+        if holding_cost is not None and holding_cost < 0:
             raise ValueError('Holding cost cannot be negative.')
-        if shortage_cost < 0:
+        if shortage_cost is not None and shortage_cost < 0:
             raise ValueError('Shortage cost cannot be negative.')
 
         # sec1: item in question
@@ -61,7 +63,10 @@ class Inventory():
         needed if inventory position is at or below reorder point, and 
         if the material is not already on order (preventing duplicates)
         """
-
+        # none indicates no reorder policy
+        if self.reorder_point is None or self.reorder_quantity is None:
+            return False
+    
         if (
             self.get_inventory_position() <= self.reorder_point
             and self.on_order == 0
