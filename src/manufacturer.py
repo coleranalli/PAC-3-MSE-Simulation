@@ -103,19 +103,23 @@ class Manufacturer(Node):
 
         return True
 
-    def produce(self, quantity=1):
+    def consume_inputs(self, quantity=1):
         """
-        produces requested quantity if every input is available.
-        
-        all inputs are first checked to prevent errors.
-        
-        returns true when production succeeds, false otherwise.
+        removes required input materials when production begins.
+
+        returns True when the inputs were successfully consumed.
+        returns False when there are not enough inputs.
         """
+
+        if quantity <= 0:
+            raise ValueError(
+                "Production quantity must be greater than zero."
+            )
 
         if not self.can_produce(quantity):
             return False
 
-        # all inputs are available, consumption time
+        # all required inputs are available
         for item_name in self.recipe:
 
             required_per_unit = self.recipe[item_name]
@@ -125,8 +129,29 @@ class Manufacturer(Node):
 
             inventory.remove_inventory(required_quantity)
 
-        # add finished product to output inventory
-        self.output_inventory.add_inventory(quantity)
+        return True
+
+    def complete_production(self, quantity=1):
+        """adds finished material to output inv when production completes"""
+
+        if quantity <= 0:
+            raise ValueError(
+                "Production quantity must be greater than zero."
+            )
+
+        self.output_inventory.add_inventory(
+            quantity
+        )
+
+        return True
+
+    def produce(self, quantity=1):
+        """immediately produces requested quantity"""
+
+        if not self.consume_inputs(quantity):
+            return False
+
+        self.complete_production(quantity)
 
         return True
 

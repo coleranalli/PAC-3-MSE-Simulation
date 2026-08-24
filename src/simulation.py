@@ -80,7 +80,7 @@ class SimulationRunner:
         # only manufacturer objects can use this
         if not isinstance(manufacturer, Manufacturer):
             raise ValueError(
-                f"Node {manufacturer_id} does not exist"
+                f"Node {manufacturer_id} is not a manufacturer"
             )
 
         if quantity <= 0:
@@ -89,12 +89,71 @@ class SimulationRunner:
             )
 
         # no production if inputs are not available
-        if not manufacturer.can_produce(quantity):
+        if not manufacturer.consume_inputs(quantity):
             return False
 
         # wait for processing lead time
         yield self.env.timeout(manufacturer.lead_time)
 
-        production_succeeded = manufacturer.produce(quantity)
+        manufacturer.complete_production(quantity)
 
-        return production_succeeded
+        return True
+
+    def production_completion_process(self,manufacturer,quantity):
+        """waits for production process to complete"""
+
+        yield self.env.timeout(manufacturer.lead_time)
+
+        manufacturer.complete_production(quantity)
+
+    def daily_production_controller(self,manufacturer_id):
+        """
+        attempts a production start each day.
+
+        capacity = average number of whole units completed per day
+        """
+
+        if manufacturer_id not in self.model.nodes:
+            raise ValueError(
+                f"Manufacturer {manufacturer_id} does not exist."
+            )
+
+        manufacturer = self.model.nodes[manufacturer_id]
+
+        if not isinstance(manufacturer, Manufacturer):
+            raise ValueError(
+                f"Node {manufacturer_id} is not a manufacturer."
+            )
+
+        if manufacturer.capacity <= 0:
+            raise ValueError(
+                "Manufacturer capacity must be greater than zero."
+            )
+
+        # unused fractional capacity storage
+        capacity_balance = 0
+
+        while True:
+
+            # each new day = one more day of capcity
+            capacity_balance += manufacturer.capacity
+
+            units_allowed = int(capacity_balance)
+
+            capacity_balance -= units_allowed
+
+            for unit_number in range(units_allowed):
+
+                # no amterial = stop starting units
+                if not manufacturer.can_produce(1):
+                    break
+
+                manufacturer.consume_inputs(1)
+
+                # unit can process simaltaneously with other units
+                self.env.process(
+                    self.production_completion_process(manufacturer,1)
+                )
+
+            # move to next day
+            yield self.env.timeout(1)

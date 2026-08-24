@@ -98,8 +98,7 @@ def test_s6_production_uses_simulated_time():
     model = build_test_model()
 
     env = simpy.Environment()
-
-    runner = SimulationRunner(model,env)
+    runner = SimulationRunner(model, env)
 
     s6 = model.nodes["S6"]
 
@@ -112,25 +111,45 @@ def test_s6_production_uses_simulated_time():
     starting_composite = composite_inventory.on_hand
     starting_motor_cases = motor_case_inventory.on_hand
 
-    process = env.process(runner.production_process("S6",2))
+    quantity = 2
 
-    # partial process
+    process = env.process(
+        runner.production_process(
+            "S6",
+            quantity
+        )
+    )
+
+    # Run partway through production.
     env.run(until=1)
 
-    assert env.now == 1
-    assert composite_inventory.on_hand == starting_composite
-    assert motor_case_inventory.on_hand == starting_motor_cases
+    required_composite = (
+        s6.recipe["Composite"] * quantity
+    )
 
-    # full process
+    # Inputs should already be reserved/consumed.
+    assert composite_inventory.on_hand == (
+        starting_composite - required_composite
+    )
+
+    # Finished output should not exist yet.
+    assert motor_case_inventory.on_hand == (
+        starting_motor_cases
+    )
+
+    # Finish production.
     env.run(until=process)
 
     assert env.now == 45
+
+    # Inputs should not be consumed a second time.
     assert composite_inventory.on_hand == (
-        starting_composite - 2
+        starting_composite - required_composite
     )
 
+    # Finished Motor Cases now become available.
     assert motor_case_inventory.on_hand == (
-        starting_motor_cases + 2
+        starting_motor_cases + quantity
     )
 
 test_s6_production_uses_simulated_time()
@@ -170,3 +189,72 @@ def test_production_does_not_start_without_inputs():
     )
 
 test_production_does_not_start_without_inputs()
+
+def test_inputs_are_reserved_when_production_starts():
+    model = build_test_model()
+
+    env = simpy.Environment()
+    runner = SimulationRunner(model, env)
+
+    s6 = model.nodes["S6"]
+
+    composite_inventory = (s6.input_inventories["Composite"])
+
+    motor_case_inventory = (s6.output_inventory)
+
+    starting_composite = (composite_inventory.on_hand)
+
+    starting_output = (motor_case_inventory.on_hand)
+
+    process = env.process(
+        runner.production_process("S6",1)
+    )
+
+    # advance to production period
+    env.run(until=1)
+
+    assert composite_inventory.on_hand == (starting_composite - 1)
+
+    # motor case not finished
+    assert motor_case_inventory.on_hand == (starting_output)
+
+    env.run(until=process)
+
+    assert env.now == 45
+
+    assert motor_case_inventory.on_hand == (starting_output + 1)
+
+test_inputs_are_reserved_when_production_starts()
+
+def test_daily_capacity_starts_overlapping_production():
+    model = build_test_model()
+
+    env = simpy.Environment()
+    runner = SimulationRunner(model, env)
+
+    s6 = model.nodes["S6"]
+
+    composite_inventory = (s6.input_inventories["Composite"])
+
+    motor_case_inventory = (s6.output_inventory)
+
+    starting_composite = (composite_inventory.on_hand)
+
+    starting_output = (motor_case_inventory.on_hand)
+
+    env.process(
+        runner.daily_production_controller("S6")
+    )
+
+    # runs through production launches til day 4
+    env.run(until=4)
+
+    # total started by 4 = 5.2 = 5
+    assert composite_inventory.on_hand == (
+        starting_composite - 5
+    )
+
+    # requires 46 days
+    assert motor_case_inventory.on_hand == (starting_output)
+
+test_daily_capacity_starts_overlapping_production()
