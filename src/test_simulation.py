@@ -93,3 +93,80 @@ def test_supplier_shipment_uses_simulated_time():
     assert ap_inventory.on_order == 0
 
 test_supplier_shipment_uses_simulated_time()
+
+def test_s6_production_uses_simulated_time():
+    model = build_test_model()
+
+    env = simpy.Environment()
+
+    runner = SimulationRunner(model,env)
+
+    s6 = model.nodes["S6"]
+
+    composite_inventory = s6.input_inventories[
+        "Composite"
+    ]
+
+    motor_case_inventory = s6.output_inventory
+
+    starting_composite = composite_inventory.on_hand
+    starting_motor_cases = motor_case_inventory.on_hand
+
+    process = env.process(runner.production_process("S6",2))
+
+    # partial process
+    env.run(until=1)
+
+    assert env.now == 1
+    assert composite_inventory.on_hand == starting_composite
+    assert motor_case_inventory.on_hand == starting_motor_cases
+
+    # full process
+    env.run(until=process)
+
+    assert env.now == 45
+    assert composite_inventory.on_hand == (
+        starting_composite - 2
+    )
+
+    assert motor_case_inventory.on_hand == (
+        starting_motor_cases + 2
+    )
+
+test_s6_production_uses_simulated_time()
+
+def test_production_does_not_start_without_inputs():
+    model = build_test_model()
+
+    env = simpy.Environment()
+    runner = SimulationRunner(model, env)
+
+    s6 = model.nodes["S6"]
+
+    composite_inventory = s6.input_inventories[
+        "Composite"
+    ]
+
+    motor_case_inventory = s6.output_inventory
+
+    # remove all available composite
+    composite_inventory.on_hand = 0
+
+    starting_output = motor_case_inventory.on_hand
+
+    process = env.process(
+        runner.production_process(
+            "S6",
+            1
+        )
+    )
+
+    env.run(until=process)
+
+    assert env.now == 0
+
+    assert motor_case_inventory.on_hand == (
+        starting_output
+    )
+
+test_production_does_not_start_without_inputs()

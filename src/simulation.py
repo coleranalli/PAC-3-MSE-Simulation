@@ -63,3 +63,38 @@ class SimulationRunner:
         self.model.deliver_shipment(shipment)
 
         return shipment
+
+    def production_process(self, manufacturer_id, quantity=1):
+        """
+        waits for manufacturer's processing time, then performas production
+        """
+
+        # make sure node exists
+        if manufacturer_id not in self.model.nodes:
+            raise ValueError(
+                f"Manufacturer {manufacturer_id} does not exist"
+            )
+
+        manufacturer = self.model.nodes[manufacturer_id]
+
+        # only manufacturer objects can use this
+        if not isinstance(manufacturer, Manufacturer):
+            raise ValueError(
+                f"Node {manufacturer_id} does not exist"
+            )
+
+        if quantity <= 0:
+            raise ValueError(
+                "Production quantity must be greater than zero."
+            )
+
+        # no production if inputs are not available
+        if not manufacturer.can_produce(quantity):
+            return False
+
+        # wait for processing lead time
+        yield self.env.timeout(manufacturer.lead_time)
+
+        production_succeeded = manufacturer.produce(quantity)
+
+        return production_succeeded
