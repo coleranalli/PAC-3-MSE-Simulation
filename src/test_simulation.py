@@ -114,10 +114,7 @@ def test_s6_production_uses_simulated_time():
     quantity = 2
 
     process = env.process(
-        runner.production_process(
-            "S6",
-            quantity
-        )
+        runner.production_process("S6",quantity)
     )
 
     # Run partway through production.
@@ -174,10 +171,7 @@ def test_production_does_not_start_without_inputs():
     starting_output = motor_case_inventory.on_hand
 
     process = env.process(
-        runner.production_process(
-            "S6",
-            1
-        )
+        runner.production_process("S6",1)
     )
 
     env.run(until=process)
@@ -258,3 +252,71 @@ def test_daily_capacity_starts_overlapping_production():
     assert motor_case_inventory.on_hand == (starting_output)
 
 test_daily_capacity_starts_overlapping_production()
+
+def test_stochastic_supplier_delay_stays_in_range():
+    model = build_test_model()
+
+    env = simpy.Environment()
+
+    runner = SimulationRunner(
+        model,
+        env,
+        stochastic=True,
+        random_seed=42
+    )
+
+    order = model.create_order(
+        origin_id="S1",
+        destination_id="M1",
+        item_name="AP",
+        quantity=10
+    )
+
+    delay = runner.get_shipment_delay(order)
+
+    # lead time 7, variability 2
+    assert delay >= 5
+    assert delay <= 9
+
+def test_stochastic_production_delay_stays_in_range():
+    model = build_test_model()
+
+    env = simpy.Environment()
+
+    runner = SimulationRunner(model, env, stochastic=True,
+        random_seed=42)
+
+    s6 = model.nodes["S6"]
+
+    delay = runner.get_production_delay(s6)
+
+    # lead time 45, variability 10
+    assert delay >= 35
+    assert delay <= 55
+
+test_stochastic_production_delay_stays_in_range()
+
+def test_random_seed_reproduces_results():
+    model1 = build_test_model()
+    model2 = build_test_model()
+
+    env1 = simpy.Environment()
+    env2 = simpy.Environment()
+
+    runner1 = SimulationRunner(model1,env1,
+        stochastic=True,random_seed=100)
+
+    runner2 = SimulationRunner(model2,env2,
+        stochastic=True,random_seed=100)
+
+    delay1 = runner1.get_production_delay(
+        model1.nodes["S6"]
+    )
+
+    delay2 = runner2.get_production_delay(
+        model2.nodes["S6"]
+    )
+
+    assert delay1 == delay2
+
+test_random_seed_reproduces_results()

@@ -1,5 +1,6 @@
 from manufacturer import Manufacturer
 from supplier import Supplier
+import random
 
 def get_deterministic_shipment_delay(model, order):
     """
@@ -31,30 +32,64 @@ def get_deterministic_shipment_delay(model, order):
         "Shipment origin must be a supplier or manufacturer."
     )
 
+def sample_variable_lead_time(
+    random_generator, 
+    lead_time, 
+    variability
+    ):
+    """
+    samples lead time using baseline lead time & variability
+    
+    uniform distribution between lead_time +/- variability
+    """
+
+    if lead_time < 0:
+        return ValueError("Lead time cannot be negative.")
+
+    if variability is None or variability == 0:
+        return lead_time
+
+    if variability < 0:
+        raise ValueError("Variability cannot be negative.")
+
+    minimum_time = max(0, lead_time-variability)
+
+    maximum_time = (lead_time + variability)
+
+    sampled_time = random_generator.uniform(
+        minimum_time, maximum_time
+    )
+
+    return sampled_time
+    
 class SimulationRunner:
     """controls timed simulation process"""
 
-    def __init__(self, model, environment=None):
+    def __init__(self, model, environment=None,
+        stochastic=False, random_seed=None):
 
         self.model=model
+        self.stochastic = stochastic
+
         if environment is None:
             import simpy
             environment = simpy.Environment()
-
+        
         self.env = environment
 
+        # seperate rng for this sim
+        self.random_generator = random.Random(
+            random_seed
+        )
+
     def shipment_process(self, order):
-        """
-        creates a shipment, waits for lead time, then delivers.
-        """
+        """creates a shipment, waits for lead time, then delivers."""
 
         # creating shipment
         shipment = self.model.create_shipment(order)
 
-        # determine how ong shipment should take
-        delay = get_deterministic_shipment_delay(
-            self.model, order
-        )
+        # determine how long shipment should take
+        delay = self.get_shipment_delay(order)
 
         # pause process for simulated delay
         yield self.env.timeout(delay)
@@ -63,6 +98,18 @@ class SimulationRunner:
         self.model.deliver_shipment(shipment)
 
         return shipment
+
+    def get_production_delay(self, manufacturer):
+        """returns processing time for one production lot"""
+
+        if not self.stochastic:
+            return manufacturer.lead_time
+
+        return sample_variable_lead_time(
+            self.random_generator,
+            manufacturer.lead_time,
+            manufacturer.variability
+        )
 
     def production_process(self, manufacturer_id, quantity=1):
         """
@@ -93,16 +140,20 @@ class SimulationRunner:
             return False
 
         # wait for processing lead time
-        yield self.env.timeout(manufacturer.lead_time)
+        production_delay = self.get_production_delay(manufacturer)
+
+        yield self.env.timeout(production_delay)
 
         manufacturer.complete_production(quantity)
 
         return True
 
     def production_completion_process(self,manufacturer,quantity):
-        """waits for production process to complete"""
+        """complete production lot after processing time is up"""
 
-        yield self.env.timeout(manufacturer.lead_time)
+        production_delay = self.get_production_delay(manufacturer)
+
+        yield self.env.timeout(production_delay)
 
         manufacturer.complete_production(quantity)
 
@@ -157,3 +208,35 @@ class SimulationRunner:
 
             # move to next day
             yield self.env.timeout(1)
+
+    def get_shipment_delay(self, order):
+        """
+        returns the shipment delay for an order.
+        
+        deterministic just uses base lead_time, stochastic adds
+        configured variability.
+        """
+
+        deterministic_delay = (get_deterministic_shipment_delay(
+            self.model, order)
+            )
+
+        # manufacturer shipments have no additional modeled transport time
+        if deterministic_delay == 0:
+            return 0
+
+        if not self.stochastic:
+            return deterministic_delay
+
+        transport_link = self.model.find_transport_link(
+            order.origin_id,
+            order.destination_id,
+            order.item_name
+        )
+
+        return sample_variable_lead_time(
+            self.random_generator,
+            deterministic_delay,
+            transport_link.variability
+        )
+    
