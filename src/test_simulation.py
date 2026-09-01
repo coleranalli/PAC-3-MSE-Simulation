@@ -4,8 +4,11 @@ import simpy
 
 from model_builder import build_model_from_configuration
 from order import Order
-from simulation import (SimulationRunner,
-    get_deterministic_shipment_delay
+from simulation import (
+    SimulationRunner,
+    get_deterministic_shipment_delay,
+    sample_disruption_duration,
+    sample_variable_lead_time
 )
 
 
@@ -41,8 +44,6 @@ def test_deterministic_shipment_delay():
 
     assert supplier_delay == 7
     assert manufacturer_delay == 0
-
-test_deterministic_shipment_delay()
 
 def test_supplier_shipment_uses_simulated_time():
     model = build_test_model()
@@ -91,8 +92,6 @@ def test_supplier_shipment_uses_simulated_time():
     assert ap_inventory.on_hand == starting_inventory + 10
 
     assert ap_inventory.on_order == 0
-
-test_supplier_shipment_uses_simulated_time()
 
 def test_s6_production_uses_simulated_time():
     model = build_test_model()
@@ -149,8 +148,6 @@ def test_s6_production_uses_simulated_time():
         starting_motor_cases + quantity
     )
 
-test_s6_production_uses_simulated_time()
-
 def test_production_does_not_start_without_inputs():
     model = build_test_model()
 
@@ -181,8 +178,6 @@ def test_production_does_not_start_without_inputs():
     assert motor_case_inventory.on_hand == (
         starting_output
     )
-
-test_production_does_not_start_without_inputs()
 
 def test_inputs_are_reserved_when_production_starts():
     model = build_test_model()
@@ -218,8 +213,6 @@ def test_inputs_are_reserved_when_production_starts():
 
     assert motor_case_inventory.on_hand == (starting_output + 1)
 
-test_inputs_are_reserved_when_production_starts()
-
 def test_daily_capacity_starts_overlapping_production():
     model = build_test_model()
 
@@ -250,8 +243,6 @@ def test_daily_capacity_starts_overlapping_production():
 
     # requires 46 days
     assert motor_case_inventory.on_hand == (starting_output)
-
-test_daily_capacity_starts_overlapping_production()
 
 def test_stochastic_supplier_delay_stays_in_range():
     model = build_test_model()
@@ -294,8 +285,6 @@ def test_stochastic_production_delay_stays_in_range():
     assert delay >= 35
     assert delay <= 55
 
-test_stochastic_production_delay_stays_in_range()
-
 def test_random_seed_reproduces_results():
     model1 = build_test_model()
     model2 = build_test_model()
@@ -319,4 +308,180 @@ def test_random_seed_reproduces_results():
 
     assert delay1 == delay2
 
-test_random_seed_reproduces_results()
+def test_disruption_duration_stays_in_range():
+    model = build_test_model()
+
+    env = simpy.Environment()
+
+    runner = SimulationRunner(model, env,
+        stochastic=True, random_seed=42)
+
+    duration = sample_disruption_duration(
+        runner.random_generator, "3-7"
+    )
+
+    assert duration >= 3
+    assert duration <= 7
+
+def test_disruption_can_start():
+    model = build_test_model()
+
+    env = simpy.Environment()
+
+    runner = SimulationRunner(model,env,
+        stochastic=True, random_seed=42)
+
+    s6 = model.nodes["S6"]
+
+    # temporary guarentee of disruption
+    s6.disruption_probability= 1.0
+
+    disruption_started = (
+        runner.check_for_disruption("S6")
+    )
+
+    assert disruption_started is True
+
+    assert runner.is_node_disrupted("S6") is True
+
+    assert len(runner.disruption_log) == 1
+
+    event = runner.disruption_log[0]
+
+    assert event["node_id"] == "S6"
+
+    assert event["start_time"] == 0
+
+    assert event["duration"] >= 3
+    assert event["duration"] <= 7
+
+    assert event["end_time"] == (
+        event["start_time"] + event["duration"]
+    )
+
+def test_disruption_blocks_new_production():
+    model = build_test_model()
+
+    env = simpy.Environment()
+
+    runner = SimulationRunner(model,env,
+        stochastic=True,random_seed=42)
+
+    s6 = model.nodes["S6"]
+
+    composite_inventory = (
+        s6.input_inventories["Composite"]
+    )
+
+    starting_composite = (composite_inventory.on_hand)
+
+    # make sure disruption 
+    s6.disruption_probability = 1.0
+
+    env.process(
+        runner.daily_production_controller(
+            "S6"
+        )
+    )
+
+    # Only run one simulated day.
+    env.run(until=1)
+
+    # No material should have entered production.
+    assert composite_inventory.on_hand == (
+        starting_composite
+    )
+
+    assert runner.is_node_disrupted(
+        "S6"
+    ) is True
+
+def test_supplier_disruption_pauses_fulfillment():
+    model = build_test_model()
+    env = simpy.Environment()
+    runner = SimulationRunner(model,env,
+        stochastic=True,random_seed=42)
+
+    s1 = model.nodes["S1"]
+
+    s1_to_m1 = model.find_transport_link("S1","M1","AP")
+
+    s1_to_m1.variability = 0
+    s1.disruption_probability = 0
+
+    # initial 2 day disruption
+    runner.disrupted_until["S1"] = 2
+
+    order = model.create_order(
+        origin_id="S1",
+        destination_id="M1",
+        item_name="AP",
+        quantity=10
+    )
+
+    process = env.process(
+        runner.shipment_process(order)
+    )
+
+    env.run(until=process)
+
+    # 2 disrupted days, 7 normal days
+    assert env.now == 9
+
+    assert order.status == "complete"
+
+test_supplier_disruption_pauses_fulfillment()
+
+def test_supplier_replenishment_controller_creates_order():
+    model = build_test_model()
+
+    env = simpy.Environment()
+
+    runner = SimulationRunner(model,env)
+
+    ap_inventory = model.get_inventory("M1","AP")
+
+    # force AP to reorder point
+    ap_inventory.on_hand = (ap_inventory.reorder_point)
+
+    ap_inventory.on_order = 0
+
+    env.process(runner.supplier_replenishment_controller())
+
+    env.run(until=1)
+
+    assert len(model.orders) == 1
+
+    order = model.orders[0]
+
+    assert order.origin_id == "S1"
+    assert order.destination_id == "M1"
+    assert order.item_name == "AP"
+
+    assert order.quantity == (ap_inventory.reorder_quantity)
+
+    assert ap_inventory.on_order == (ap_inventory.reorder_quantity)
+
+test_supplier_replenishment_controller_creates_order()
+
+def test_supplier_replenishment_does_not_duplicate_order():
+    model = build_test_model()
+
+    env = simpy.Environment()
+
+    runner = SimulationRunner(model,env)
+
+    ap_inventory = model.get_inventory("M1","AP")
+
+    ap_inventory.on_hand = (ap_inventory.reorder_point)
+
+    ap_inventory.on_order = 0
+
+    env.process(runner.supplier_replenishment_controller())
+
+    env.run(until=3)
+
+   # shipment hasn't arrived, only one order exists
+    assert len(model.orders) == 1
+
+test_supplier_replenishment_does_not_duplicate_order()
