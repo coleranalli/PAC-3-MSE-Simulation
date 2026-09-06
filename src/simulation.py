@@ -118,6 +118,8 @@ class SimulationRunner:
         # disruption events for later reporting
         self.disruption_log = []
 
+        self.controllers_started = False
+
 
     def shipment_process(self, order):
         """creates a shipment, waits for lead time, then delivers."""
@@ -424,3 +426,126 @@ class SimulationRunner:
             self.env.process(self.shipment_process(order))
 
             yield self.env.timeout(1)
+
+    def intermediate_replenishment_controller(self):
+        """
+        moves manufacturer output to downstream manufacturers when
+        downstream node requires that item for production.
+
+        any currently avaialble upstream inventory becomes shipment.
+        """
+
+        while True:
+
+            for transport_link in self.model.transport_links:
+
+                origin_node = self.model.nodes[
+                    transport_link.origin_id
+                ]
+
+                destination_node = self.model.nodes[
+                    transport_link.destination_id
+                ]
+
+                # only manufacturer origin links
+                if not isinstance(origin_node, Manufacturer):
+                    continue
+
+                # destination has to consume material through recipe
+                if not isinstance(destination_node, Manufacturer):
+                    continue
+
+                item_name = transport_link.item_name
+
+                # actually verify downstream node needs item
+                if item_name not in destination_node.recipe:
+                    continue
+
+                downstream_inventory = (
+                    self.model.get_inventory(
+                        transport_link.destination_id, item_name)
+                )
+
+                upstream_inventory = (
+                    self.model.get_inventory(
+                        transport_link.origin_id, item_name)
+                )
+
+                if downstream_inventory is None:
+                    continue
+
+                if upstream_inventory is None:
+                    continue
+
+                required_per_unit = (
+                    destination_node.recipe[
+                        item_name
+                    ]
+                )
+
+                # if downstream node already has enough material to
+                # start a unit, no transfer is needed yet
+                if downstream_inventory.can_fulfill(
+                    required_per_unit
+                ):
+                    continue
+
+                # no duplicates DH
+                if downstream_inventory.on_order > 0:
+                    continue
+
+                available_quantity = (upstream_inventory.on_hand)
+
+                if available_quantity <= 0:
+                    continue
+
+                order = self.model.create_order(
+                    origin_id=transport_link.origin_id,
+                    destination_id=transport_link.destination_id,
+                    item_name=item_name,
+                    quantity=available_quantity
+                )
+
+                self.env.process(self.shipment_process(order))
+
+                yield self.env.timeout(1)
+
+    def start_controllers(self):
+        """auto starts continuous sim controllers"""
+
+        if self.controllers_started:
+            return
+
+        self.controllers_started = True
+
+        # supplier reorder monitor
+        self.env.process(
+            self.supplier_replenishment_controller()
+        )
+
+        # intermediate manufacturer transfers
+        self.env.process(self.intermediate_replenishment_controller())
+
+        # production processes
+        manufacturer_ids = ["S6","M1","A1"]
+
+        for manufacturer_id in manufacturer_ids:
+
+            self.env.process(
+                self.daily_production_controller(manufacturer_id)
+            )
+
+    def run(self, until):
+        """
+        starts sim controllers and runs supply chain
+        until requested sim time (typically a year).
+        """
+
+        if until <= self.env.now:
+            raise ValueError(
+                "Sim end time must be greater than current sim time."
+            )
+
+        self.start_controllers()
+
+        self.env.run(until=until)

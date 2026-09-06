@@ -462,7 +462,7 @@ def test_supplier_replenishment_controller_creates_order():
 
     assert ap_inventory.on_order == (ap_inventory.reorder_quantity)
 
-test_supplier_replenishment_controller_creates_order()
+
 
 def test_supplier_replenishment_does_not_duplicate_order():
     model = build_test_model()
@@ -484,4 +484,87 @@ def test_supplier_replenishment_does_not_duplicate_order():
    # shipment hasn't arrived, only one order exists
     assert len(model.orders) == 1
 
-test_supplier_replenishment_does_not_duplicate_order()
+
+def test_intermediate_controller_moves_motor_cases():
+    model = build_test_model()
+
+    env = simpy.Environment()
+    runner = SimulationRunner(model, env)
+
+    s6_output = model.get_inventory("S6","Motor Case")
+
+    m1_motor_cases = model.get_inventory("M1","Motor Case")
+
+    # force empty downstream inv
+    m1_motor_cases.on_hand = 0
+    m1_motor_cases.on_order = 0
+
+    # pretend s6 completed a batch
+    s6_output.on_hand = 5
+
+    env.process(runner.intermediate_replenishment_controller())
+
+    env.run(until=1)
+
+    assert len(model.orders) == 1
+
+    order = model.orders[0]
+
+    assert order.origin_id == "S6"
+    assert order.destination_id == "M1"
+    assert order.item_name == "Motor Case"
+    assert order.quantity == 5
+
+    assert s6_output.on_hand == 0
+    assert m1_motor_cases.on_hand == 5
+    assert order.status == "complete"
+
+test_intermediate_controller_moves_motor_cases()
+
+def test_intermediate_controller_waits_until_needed():
+    model = build_test_model()
+
+    env = simpy.Environment()
+    runner = SimulationRunner(model, env)
+
+    s6_output = model.get_inventory("S6","Motor Case")
+
+    m1_motor_cases = model.get_inventory("M1","Motor Case")
+
+    s6_output.on_hand = 5
+
+    # M1 still has enough for one production unit.
+    m1_motor_cases.on_hand = 1
+
+    env.process(runner.intermediate_replenishment_controller())
+
+    env.run(until=1)
+
+    assert len(model.orders) == 0
+    assert s6_output.on_hand == 5
+
+test_intermediate_controller_waits_until_needed()
+
+def test_intermediate_controller_moves_propulsion_modules():
+    model = build_test_model()
+
+    env = simpy.Environment()
+    runner = SimulationRunner(model, env)
+
+    m1_output = model.get_inventory("M1","Propulsion Module")
+
+    a1_input = model.get_inventory("A1","Propulsion Module")
+
+    a1_input.on_hand = 0
+    a1_input.on_order = 0
+
+    m1_output.on_hand = 3
+
+    env.process(runner.intermediate_replenishment_controller())
+
+    env.run(until=1)
+
+    assert m1_output.on_hand == 0
+    assert a1_input.on_hand == 3
+
+test_intermediate_controller_moves_propulsion_modules()
