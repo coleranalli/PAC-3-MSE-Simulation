@@ -232,14 +232,13 @@ class SimulationRunner:
         capacity_balance = 0
 
         while True:
-            if self.is_node_disrupted(self.check_for_disruption,
-                manufacturer_id):
+            if self.is_node_disrupted(manufacturer_id):
                 yield self.env.timeout(1)
                 continue
 
             disruption_started = (self.check_for_disruption(manufacturer_id))
 
-            if self.disruption_started:
+            if disruption_started:
                 yield self.env.timeout(1)
                 continue
 
@@ -400,30 +399,30 @@ class SimulationRunner:
                 ]
 
             # suppliers only
-            if not isinstance(origin_node, Supplier):
-                continue
+                if not isinstance(origin_node, Supplier):
+                    continue
 
-            destination_id = transport_link.destination_id
+                destination_id = transport_link.destination_id
 
-            item_name = transport_link.item_name
+                item_name = transport_link.item_name
 
-            inventory = self.model.get_inventory(
-                destination_id, item_name
-            )
-
-            if inventory is None:
-                continue
-
-            if inventory.should_reorder():
-
-                order = self.model.create_order(
-                    origin_id = transport_link.origin_id,
-                    destination_id = destination_id,
-                    item_name = item_name,
-                    quantity = inventory.reorder_quantity
+                inventory = self.model.get_inventory(
+                    destination_id, item_name
                 )
 
-            self.env.process(self.shipment_process(order))
+                if inventory is None:
+                    continue
+
+                if inventory.should_reorder():
+
+                    order = self.model.create_order(
+                        origin_id = transport_link.origin_id,
+                        destination_id = destination_id,
+                        item_name = item_name,
+                        quantity = inventory.reorder_quantity
+                    )
+
+                    self.env.process(self.shipment_process(order))
 
             yield self.env.timeout(1)
 
@@ -508,7 +507,7 @@ class SimulationRunner:
 
                 self.env.process(self.shipment_process(order))
 
-                yield self.env.timeout(1)
+            yield self.env.timeout(1)
 
     def start_controllers(self):
         """auto starts continuous sim controllers"""
@@ -549,3 +548,32 @@ class SimulationRunner:
         self.start_controllers()
 
         self.env.run(until=until)
+
+    def get_summary(self):
+        """returns basic info about sim"""
+
+        s6_output = self.model.get_inventory("S6","Motor Case")
+
+        m1_output = self.model.get_inventory("M1","Propulsion Module")
+
+        a1_output = self.model.get_inventory("A1","Final Modeled Unit")
+
+        summary = {
+
+            "simulation_time" : self.env.now,
+
+            "orders_created" : len(self.model.orders),
+
+            "shipments_created" : len(self.model.shipments),
+
+            "disruptions" : len(self.disruption_log),
+
+            "motor_cases_on_hand" : s6_output.on_hand,
+
+            "propulsion_modules_on_hand" : m1_output.on_hand,
+
+            "final_units_on_hand" : a1_output.on_hand
+        }
+
+        return summary
+        

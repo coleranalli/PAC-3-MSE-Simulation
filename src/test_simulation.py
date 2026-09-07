@@ -430,7 +430,6 @@ def test_supplier_disruption_pauses_fulfillment():
 
     assert order.status == "complete"
 
-test_supplier_disruption_pauses_fulfillment()
 
 def test_supplier_replenishment_controller_creates_order():
     model = build_test_model()
@@ -461,7 +460,6 @@ def test_supplier_replenishment_controller_creates_order():
     assert order.quantity == (ap_inventory.reorder_quantity)
 
     assert ap_inventory.on_order == (ap_inventory.reorder_quantity)
-
 
 
 def test_supplier_replenishment_does_not_duplicate_order():
@@ -519,8 +517,6 @@ def test_intermediate_controller_moves_motor_cases():
     assert m1_motor_cases.on_hand == 5
     assert order.status == "complete"
 
-test_intermediate_controller_moves_motor_cases()
-
 def test_intermediate_controller_waits_until_needed():
     model = build_test_model()
 
@@ -542,8 +538,6 @@ def test_intermediate_controller_waits_until_needed():
 
     assert len(model.orders) == 0
     assert s6_output.on_hand == 5
-
-test_intermediate_controller_waits_until_needed()
 
 def test_intermediate_controller_moves_propulsion_modules():
     model = build_test_model()
@@ -567,4 +561,39 @@ def test_intermediate_controller_moves_propulsion_modules():
     assert m1_output.on_hand == 0
     assert a1_input.on_hand == 3
 
-test_intermediate_controller_moves_propulsion_modules()
+def test_full_network_produces_final_units():
+    model = build_test_model()
+
+    env = simpy.Environment()
+
+    runner = SimulationRunner(model,env)
+
+    final_inventory = model.get_inventory("A1",
+        "Final Modeled Unit"
+    )
+
+    starting_final_units = (final_inventory.on_hand)
+
+    runner.run(until=120)
+
+    assert env.now == 120
+
+    assert final_inventory.on_hand > (
+        starting_final_units
+    )
+
+def test_simulation_summary():
+    model = build_test_model()
+
+    env = simpy.Environment()
+
+    runner = SimulationRunner(model,env)
+
+    runner.run(until=30)
+
+    summary = runner.get_summary()
+
+    assert summary["simulation_time"] == 30
+    assert summary["orders_created"] >= 0
+    assert summary["shipments_created"] >= 0
+    assert summary["disruptions"] == 0
