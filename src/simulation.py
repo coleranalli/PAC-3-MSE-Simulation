@@ -1,6 +1,7 @@
 from manufacturer import Manufacturer
 from supplier import Supplier
 import random
+from metrics import SimulationMetrics
 
 def get_deterministic_shipment_delay(model, order):
     """
@@ -120,6 +121,8 @@ class SimulationRunner:
 
         self.controllers_started = False
 
+        self.metrics = SimulationMetrics()
+
 
     def shipment_process(self, order):
         """creates a shipment, waits for lead time, then delivers."""
@@ -186,12 +189,18 @@ class SimulationRunner:
         if not manufacturer.consume_inputs(quantity):
             return False
 
+        # inputs reserved, prod start
+        self.metrics.record_production_start(manufacturer_id, quantity)
+
         # wait for processing lead time
         production_delay = self.get_production_delay(manufacturer)
 
         yield self.env.timeout(production_delay)
 
         manufacturer.complete_production(quantity)
+
+        self.metrics.record_production_completion(
+            manufacturer_id, quantity)
 
         return True
 
@@ -203,6 +212,9 @@ class SimulationRunner:
         yield self.env.timeout(production_delay)
 
         manufacturer.complete_production(quantity)
+
+        self.metrics.record_production_completion(
+            manufacturer.node_id, quantity)
 
     def daily_production_controller(self,manufacturer_id):
         """
@@ -253,7 +265,11 @@ class SimulationRunner:
 
                 if not manufacturer.can_produce(1):
                     break
+
                 manufacturer.consume_inputs(1)
+
+                self.metrics.record_production_start(manufacturer_id,1)
+
                 self.env.process(
                     self.production_completion_process(manufacturer,1)
                 )
