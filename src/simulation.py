@@ -2,6 +2,7 @@ from manufacturer import Manufacturer
 from supplier import Supplier
 import random
 from metrics import SimulationMetrics
+from final_assembler import FinalAssembler
 
 def get_deterministic_shipment_delay(model, order):
     """
@@ -97,10 +98,14 @@ class SimulationRunner:
     """controls timed simulation process"""
 
     def __init__(self, model, environment=None,
-        stochastic=False, random_seed=None):
+        stochastic=False, random_seed=None, daily_demand=1):
 
         self.model=model
         self.stochastic = stochastic
+
+        if daily_demand < 0:
+            raise ValueError("Demand must be positive.")
+        self.daily_demand = daily_demand
 
         if environment is None:
             import simpy
@@ -215,6 +220,32 @@ class SimulationRunner:
 
         self.metrics.record_production_completion(
             manufacturer.node_id, quantity)
+
+    def daily_demand_controller(self):
+        """
+        Adds external demand to A1 once per day to stimulate model.
+        
+        Order:
+        1. Add today's demand
+        2. Attempt to fulfill all backlog from FMU inventory
+        3. advance one day
+        """
+
+        if "A1" not in self.model.nodes:
+            raise ValueError("Final assembler does not exist.")
+
+        final_assembler = self.model.nodes["A1"]
+
+        if not isinstance(final_assembler, FinalAssembler):
+            raise ValueError("A1 is not the Final Assembler.")
+
+        while True:
+            if self.daily_demand > 0:
+                final_assembler.add_external_demand(self.daily_demand)
+
+            final_assembler.fulfill_demand()
+
+            yield self.env.timeout(1)
 
     def daily_production_controller(self,manufacturer_id):
         """
@@ -545,10 +576,12 @@ class SimulationRunner:
         manufacturer_ids = ["S6","M1","A1"]
 
         for manufacturer_id in manufacturer_ids:
-
             self.env.process(
                 self.daily_production_controller(manufacturer_id)
             )
+
+        # customer demand for FMU
+        self.env.process(self.daily_demand_controller())
 
     def run(self, until):
         """

@@ -566,7 +566,7 @@ def test_full_network_produces_final_units():
 
     env = simpy.Environment()
 
-    runner = SimulationRunner(model,env)
+    runner = SimulationRunner(model,env,daily_demand=0)
 
     final_inventory = model.get_inventory("A1",
         "Final Modeled Unit"
