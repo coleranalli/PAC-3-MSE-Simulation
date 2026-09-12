@@ -583,10 +583,23 @@ class SimulationRunner:
         # customer demand for FMU
         self.env.process(self.daily_demand_controller())
 
+    def record_daily_metrics(self):
+        """records current end of day sim state"""
+
+        if "A1" not in self.model.nodes:
+            raise ValueError("Final assembler A1 does not exist")
+
+        final_assembler = self.model.nodes["A1"]
+
+        self.metrics.record_daily_snapshot(
+            self.env.now,self.model, final_assembler
+        )
+
     def run(self, until):
         """
         starts sim controllers and runs supply chain
-        until requested sim time (typically a year).
+        until requested sim end time. one observation is recorded after
+        one simulated day.
         """
 
         if until <= self.env.now:
@@ -596,7 +609,14 @@ class SimulationRunner:
 
         self.start_controllers()
 
-        self.env.run(until=until)
+        while self.env.now + 1 <= until:
+
+            next_day = self.env.now + 1
+            self.env.run(until=next_day)
+            self.record_daily_metrics()
+
+        if self.env.now < until:
+            self.env.run(until=until)
 
     def get_summary(self):
         """returns basic info about sim"""

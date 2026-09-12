@@ -66,3 +66,64 @@ class SimulationMetrics:
         }
 
         self.daily_history.append(snapshot)
+
+    def get_on_hand_history(self, node_id, item_name):
+        """returns daily on-hand values for an inventory"""
+
+        values = []
+
+        for snapshot in self.daily_history:
+
+            inventories = snapshot["inventories"]
+
+            if node_id not in inventories:
+                raise ValueError(
+                    f"No inventory history exists for node {node_id}."
+                )
+
+            if item_name not in inventories[node_id]:
+                raise ValueError(
+                    f"No inventory history exists for {item_name} at node {node_id}"
+                )
+
+            value = inventories[node_id][item_name]["on_hand"]
+
+            values.append(value)
+
+        return values
+
+    def get_average_on_hand(self, node_id, item_name):
+        """calculates average daily on_hand inventory"""
+
+        values = self.get_on_hand_history(node_id, item_name)
+
+        if len(values) == 0:
+            return None
+
+        average = sum(values) / len(values)
+
+        return average
+
+    def get_max_on_hand(self, node_id, item_name):
+        """returns highest observed on-hand inventory"""
+        values = self.get_on_hand_history(node_id, item_name)
+
+        if len(values) == 0:
+            return None
+
+        return max(values)
+
+    def get_stockout_days(self, node_id, item_name):
+        """counts days where on-hand inventory is zero"""
+
+        values = self.get_on_hand_history(node_id, item_name)
+
+        stockout_days = 0  # initalize dat!
+
+        for value in values:
+
+            if value == 0:
+                stockout_days += 1
+
+        return stockout_days
+    
