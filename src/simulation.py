@@ -295,6 +295,10 @@ class SimulationRunner:
             for unit_number in range(units_allowed):
 
                 if not manufacturer.can_produce(1):
+                    unstarted_units = (units_allowed - unit_number)
+
+                    self.metrics.record_starvation(manufacturer_id, unstarted_units)
+
                     break
 
                 manufacturer.consume_inputs(1)
@@ -306,7 +310,6 @@ class SimulationRunner:
                 )
 
             yield self.env.timeout(1)
-            
 
     def get_shipment_delay(self, order):
         """
@@ -627,22 +630,149 @@ class SimulationRunner:
 
         a1_output = self.model.get_inventory("A1","Final Modeled Unit")
 
+        a1 = self.model.nodes["A1"]
+
+        if a1.external_demand == 0:
+            service_level = None
+        else:
+            service_level = (a1.fulfilled_demand / a1.external_demand)
+
+        manufactuer_ids = ["S6", "M1", "A1"]
+
+        if self.env.now == 0:
+            simulation_days = None
+        else:
+            simulation_days = self.env.now
+
         summary = {
 
-            "simulation_time" : self.env.now,
+            "simulation_time": self.env.now,
 
-            "orders_created" : len(self.model.orders),
+            "daily_demand": self.daily_demand,
 
-            "shipments_created" : len(self.model.shipments),
+            "final_units_produced":
+                self.metrics.production_completions["A1"],
 
-            "disruptions" : len(self.disruption_log),
+            "external_demand":
+                a1.external_demand,
 
-            "motor_cases_on_hand" : s6_output.on_hand,
+            "fulfilled_demand":
+                a1.fulfilled_demand,
 
-            "propulsion_modules_on_hand" : m1_output.on_hand,
+            "ending_backlog":
+                a1.backlog,
 
-            "final_units_on_hand" : a1_output.on_hand
-        }
+            "service_level":
+                service_level,
+
+            "orders_created":
+                self.model.statistics["orders_created"],
+
+            "shipments_created":
+                self.model.statistics["shipments_created"],
+
+            "shipments_delivered":
+                self.model.statistics["shipments_delivered"],
+
+            "disruptions":
+                len(self.disruption_log)
+            }
+        
+        manufacturer_ids = ["S6", "M1", "A1"]
+
+        for manufacturer_id in manufacturer_ids:
+
+            key_name = manufacturer_id.lower()
+
+            starts = (
+                self.metrics.production_starts[manufacturer_id]
+            )
+
+            completions = (
+                self.metrics.production_completions[manufacturer_id]
+            )
+
+            summary[f"{key_name}_production_starts"] = starts
+            summary[f"{key_name}_production_completions"] = completions
+
+            if simulation_days is None:
+                throughput = None
+            else:
+                throughput = (completions / simulation_days)
+
+            summary[f"{key_name}_throughput_per_day"] = throughput
+            summary[f"{key_name}_starved_days"] = self.metrics.starved_days[
+                manufacturer_id
+            ]
+            summary[f"{key_name}_unstarted_units_due_to_storage"] = (
+                self.metrics.unstarted_units_due_to_storage[manufacturer_id]
+            )
+
+        for node_id in self.model.nodes:
+            key_name = node_id.lower()
+
+            summary[f"{key_name}_disruption_count"
+                ] = self.metrics.get_disruption_count(
+                    self.disruption_log, node_id
+                )
+
+            summary[f"{key_name}_disrupted_days"
+                ] = self.metrics.get_disrupted_days(
+                    self.disruption_log, node_id, self.env.now
+                )
+
+        for node_id in self.model.inventories:
+
+            for item_name in self.model.inventories[node_id]:
+                item_key = (item_name.lower().replace(" ", "_"))
+                inventory_key = (
+                    f"inventory_"
+                    f"{node_id.lower()}_"
+                    f"{item_key}"
+                )
+
+            inventory = (
+                self.model.inventories[node_id][item_name]
+            )
+
+            summary[f"{inventory_key}_ending_on_hand"
+                ] = inventory.on_hand
+
+            summary[f"{inventory_key}_average_on_hand"
+                ] = self.metrics.get_average_on_hand(node_id,item_name
+            )
+
+            summary[f"{inventory_key}_maximum_on_hand"
+                ] = self.metrics.get_max_on_hand(node_id,item_name
+            )
+
+            summary[f"{inventory_key}_stockout_days"
+                ] = self.metrics.get_stockout_days(node_id,item_name
+            )
+
+        s6_output = self.model.get_inventory(
+            "S6","Motor Case"
+        )
+
+        m1_output = self.model.get_inventory(
+            "M1","Propulsion Module"
+        )
+
+        a1_output = self.model.get_inventory(
+            "A1","Final Modeled Unit"
+        )
+
+        summary["motor_cases_on_hand"] = (
+            s6_output.on_hand
+        )
+
+        summary["propulsion_modules_on_hand"] = (
+            m1_output.on_hand
+        )
+
+        summary["final_units_on_hand"] = (
+            a1_output.on_hand
+        )
 
         return summary
         

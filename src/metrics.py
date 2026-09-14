@@ -8,13 +8,17 @@ class SimulationMetrics:
 
         self.production_starts = {}
         self.production_completions = {}
-
         self.daily_history = []
+        self.starved_days = {}
+        self.unstarted_units_due_to_storage = {}
 
         # start at 0
         for manufacturer_id in manufacturer_ids:
             self.production_starts[manufacturer_id] = 0
             self.production_completions[manufacturer_id] = 0
+
+            self.starved_days[manufacturer_id] = 0
+            self.unstarted_units_due_to_storage[manufacturer_id] = 0
 
     def record_production_start(self, manufacturer_id, quantity=1):
         """adds successfully started production units to counter"""
@@ -126,4 +130,53 @@ class SimulationMetrics:
                 stockout_days += 1
 
         return stockout_days
-    
+
+    def record_starvation(self, manufacturer_id, unstarted_units):
+        """records a day where production was limited by missing inputs"""
+
+        if unstarted_units <= 0:
+            raise ValueError("Unstarted units must be greater than zero")
+
+        if manufacturer_id not in self.starved_days:
+            self.starved_days[manufacturer_id] = 0
+            self.unstarted_units_due_to_storage[manufacturer_id] = 0
+
+        self.starved_days[manufacturer_id] += 1
+
+        self.unstarted_units_due_to_storage[
+            manufacturer_id
+        ] += unstarted_units
+
+    def get_disruption_count(self, disruption_log, node_id):
+        """counts diruption events for one node"""
+
+        disruption_count = 0  # initializzzeeee
+
+        for disruption in disruption_log:
+
+            if disruption["node_id"] == node_id:
+                disruption_count += 1
+
+        return disruption_count
+
+    def get_disrupted_days(self, disruption_log, node_id, simulation_horizon):
+        """calculates disruption time inside sim horizon"""
+
+        disrupted_days = 0  # mhm
+
+        for disruption in disruption_log:
+
+            if disruption["node_id"] != node_id:
+                continue
+
+            start_time = disruption["start_time"]
+            end_time = disruption["end_time"]
+
+            bounded_start = max(0,start_time)
+
+            bounded_end = min(simulation_horizon, end_time)  # >365
+
+            if bounded_end > bounded_start:
+                disrupted_days += (bounded_end - bounded_start)
+
+        return disrupted_days
