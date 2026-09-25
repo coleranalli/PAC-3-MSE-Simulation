@@ -53,11 +53,11 @@ class SimulationMetrics:
             for item_name in model.inventories[node_id]:
                 inventory = model.inventories[node_id][item_name]
 
-            inventories_snapshot[node_id][item_name] = {
-                "on_hand" : inventory.on_hand,
-                "on_order" : inventory.on_order,
-                "backorders" : inventory.backorders
-            }
+                inventories_snapshot[node_id][item_name] = {
+                    "on_hand" : inventory.on_hand,
+                    "on_order" : inventory.on_order,
+                    "backorders" : inventory.backorders
+                }
 
         snapshot = {
             "simulation_time" : simulation_time,

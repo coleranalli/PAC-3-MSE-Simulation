@@ -94,7 +94,7 @@ def build_model_from_configuration(nodes_path, links_path, recipes_path):
             ("S6", item_name)
         ]
 
-    s6_inputs[item_name] = inventory
+        s6_inputs[item_name] = inventory
 
     s6 = Manufacturer(
         node_id="S6",

@@ -731,24 +731,24 @@ class SimulationRunner:
                     f"{item_key}"
                 )
 
-            inventory = (
-                self.model.inventories[node_id][item_name]
-            )
+                inventory = (
+                    self.model.inventories[node_id][item_name]
+                )
 
-            summary[f"{inventory_key}_ending_on_hand"
-                ] = inventory.on_hand
+                summary[f"{inventory_key}_ending_on_hand"
+                    ] = inventory.on_hand
 
-            summary[f"{inventory_key}_average_on_hand"
-                ] = self.metrics.get_average_on_hand(node_id,item_name
-            )
+                summary[f"{inventory_key}_average_on_hand"
+                    ] = self.metrics.get_average_on_hand(node_id,item_name
+                )
 
-            summary[f"{inventory_key}_maximum_on_hand"
-                ] = self.metrics.get_max_on_hand(node_id,item_name
-            )
+                summary[f"{inventory_key}_maximum_on_hand"
+                    ] = self.metrics.get_max_on_hand(node_id,item_name
+                )
 
-            summary[f"{inventory_key}_stockout_days"
-                ] = self.metrics.get_stockout_days(node_id,item_name
-            )
+                summary[f"{inventory_key}_stockout_days"
+                    ] = self.metrics.get_stockout_days(node_id,item_name
+                )
 
         s6_output = self.model.get_inventory(
             "S6","Motor Case"

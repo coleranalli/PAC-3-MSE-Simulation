@@ -30,7 +30,7 @@ results_directory.mkdir(parents=True, exist_ok=True)
 plots_directory.mkdir(parents=True, exist_ok=True)
 
 #================================================#
-# settings
+# settings - MAKE CHANGES HERE
 #================================================#
 
 SIMULATION_DAYS = 365
